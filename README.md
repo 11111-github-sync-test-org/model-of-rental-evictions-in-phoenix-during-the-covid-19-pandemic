@@ -1,0 +1,5 @@
+# Model of Rental Evictions in Phoenix During the Covid-19 Pandemic
+
+The purpose of this model is to explore the dynamics of residency and eviction for households renting in the greater Phoenix (Arizona) metropolitan area. The model uses a representative population of renters modified from American Community Survey (ACS) data that includes demographic, housing and economic information. Each month, households pay their subsistence, rental and utility bills. If a household is unable to pay their monthly rent or utility bill they apply for financial assistance. This model provides a platform to understand the impact of various economic shock upon households. Also, the model includes conditions that occurred as a result of the Covid-19 pandemic which allows for the study of eviction mitigation strategies that were employed, such as the eviction moratorium and stimulus payments. The model allows us to make preliminary predictions concerning the number of households that may be evicted once the moratorium on evictions ends and the long-term effects on the number of evicted households in the greater Phoenix area going forward. 
+
+
