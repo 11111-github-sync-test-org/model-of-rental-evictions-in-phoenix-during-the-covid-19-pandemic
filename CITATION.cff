@@ -22,7 +22,7 @@ authors:
   given-names: J
   orcid: https://orcid.org/0000-0002-9052-7126
 cff-version: 1.2.0
-date-released: '2021-07-31'
+date-released: '2021-10-15'
 keywords:
 - Rental
 - COVID-19
@@ -31,5 +31,5 @@ keywords:
 license: http://www.gnu.org/licenses/gpl-3.0.html
 message: If you use this software, please cite it using the metadata from this file.
 title: Model of Rental Evictions in Phoenix During the Covid-19 Pandemic
-version: 1.0.0
+version: 1.1.0
 

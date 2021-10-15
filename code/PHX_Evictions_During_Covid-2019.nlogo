@@ -5,9 +5,9 @@
 extensions[csv]
 
 globals[
-  population
+  population ;all agents in a simulation
   year
-  rental-properties
+  rental-properties ; all the  places that agents can live
   empty-patches
   month
   ;; Variables used to track model metrics
@@ -22,27 +22,30 @@ globals[
   sixty-pct-state-median-income
   eighty-pct-state-median-income
   ;; CAP stands for community assistance program
+  ;: Pot is the amount of money that the CAP has
   cap-maricopa-utility-pot
   cap-mesa-utility-pot
   cap-phx-utility-pot
   cap-maricopa-rental-pot
   cap-mesa-rental-pot
   cap-phx-rental-pot
+  ; Each CAP has a finite number of households that can get aid each month
   cap-maricopa-rental-assist-monthly-apts
   cap-mesa-rental-assist-monthly-apts
   cap-phoenix-rental-assist-monthly-apts
   faith-based-assist-pot
-  monthly-evicted-count
-  monthly-evicted-count-final
+  monthly-evicted-count ; recorded during the month
+  monthly-evicted-count-final; recorded at the end of the month
+  ;Track the amount of assistance that is disbursed
   tracker-rental-assistance
   tracker-utility-assistance
   tracker-faith-based-assistance
-  ;;COVID
-  evictions-begin-again
-  month-incomes-improve
-  pause-month
-  covid-shock-quantity
-  ;New MAG Trackers
+  ;;COVID Related Variables
+  evictions-begin-again ; month that the eviction moratorium stops
+  month-incomes-improve ; incomes are decreased until a set month
+  pause-month ;  month that the eviction moratorium begins
+  covid-shock-quantity ; how much to effect a household's monthly income during the COVID pandemic
+  ;Data Tracking Variables
   hhs-requesting-appointments-rental
   hhs-getting-appointments-rental
   hhs-requesting-appointments-utility
@@ -51,12 +54,12 @@ globals[
 
 ; patches function as rental properties
 patches-own[
-  rent
-  tenant?
+  rent ; amount of rent owed
+  tenant? ; does the rental property have a tenant
   number-of-rooms ; RMSP
-  rental-puma
+  rental-puma ; what is the PUMA (locational information) of the rental property
   is-a-rental-property?
-  building-type
+  building-type ; house, apartment or trailer
   township
 ]
 
@@ -67,7 +70,7 @@ renters-own[
   number-of-persons;NP
   SNAP ; Supplemental Nutrition Assistance Program funds
   PAP ; amount of TANF, Temporary Assistance for Needy Families
-  vehicle-number;VEH SB* are we recoding just one or presence absence, Vehicles do not currently factor into the model.
+  vehicle-number;VEH  Vehicles do not currently factor into the model.
   vehicles-with-lien; Vehicles do not currently factor into the model.
   annual-household-income;HINCP
   monthly-rental-payment;RNTP
@@ -99,8 +102,8 @@ renters-own[
 
 to Setup
     __clear-all-and-reset-ticks
-  ;; Instantiate Rental Households according to PHX metro area ACS Data
 
+  ;; Modify the world size so that there are enough patches for the rental properties
   if population-representation-sample > 25 and population-representation-sample < 51
   [resize-world -750 750 -750 750 set-patch-size 0.25]
   if population-representation-sample > 10 and population-representation-sample < 26
@@ -108,10 +111,12 @@ to Setup
   if population-representation-sample < 11
   [resize-world -250 250 -250 250 set-patch-size 1.5]
 
-  import-pcolors "Data/phx.png"
+  ;;Load an image of the Phoenix Valley
+  import-pcolors "../data/phx.png"
 
-  Setup-Cities
+  Setup-Cities; assign city info to patches based on the previously loaded image
 
+ ;; Instantiate Rental Households according to PHX metro area ACS Data (ACS -> Arizona Community Survey)
   Load-Households-and-Rentals
 
   set rental-properties patches with [is-a-rental-property? = true]
@@ -120,14 +125,14 @@ to Setup
   set year 1
   set month 1
 
-
+  ;Variables used to record information about evictions through the simulation
   set count-evicted-from-home 0
   set count-evicted-from-apt 0
   set count-evicted-from-trailer 0
   set count-evicted 0
   ; info from https://www.hsd.maricopa.gov/5581/Utility-Assistance
-  set sixty-pct-state-median-income (list 0 2061 2695 3329 3964 4558 5232 5351 5800 6500 7000 7500 8000 8250 8500 9000)  ;*SB this needs to be finished with real numbers
-  set eighty-pct-state-median-income (list 0 2748 3593 4438 5285 6077 6976 7134 7733 8666 9333 10000 10666 11000 11333 12000)  ;*MAG
+  set sixty-pct-state-median-income (list 0 2061 2695 3329 3964 4558 5232 5351 5800 6500 7000 7500 8000 8250 8500 9000)  ;amount of income based on household size
+  set eighty-pct-state-median-income (list 0 2748 3593 4438 5285 6077 6976 7134 7733 8666 9333 10000 10666 11000 11333 12000)  ;Data comes from MAG, Maricopa Association of Governments
   set evictions-begin-again (month-number Evictions-Begin-Again-2021) + 12
   ifelse pause-evictions-April2020 and covid-effects [set pause-month 3][set pause-month 500]
 
@@ -137,22 +142,20 @@ end
 to Load-Households-and-Rentals
 
   ; Read Information from the synthetic population
-  ;let population-file "Data/synthetic200Dec17.csv"
-  let population-file "Data/syntheticACS20195yr.csv"
+  let population-file "../data/syntheticACS20195yr.csv"
   let population-list []
   set population-list csv:from-file population-file
   ; population list looks like this: [[PUMA TYPE BLD NP RNTP SNAP RMSP VEH HINCP TANF weight] [100 female head apartment 1 740 0 3 0 960 0 12] ...
 
-  ;; Remove the column names from the list
-  set population-list but-first population-list
+  set population-list but-first population-list ;; Remove the column names from the list
   ask patches [set tenant? false set is-a-rental-property? false] ; used to place houses on empty patches
-
+  ;Create rental households based on the synthetic dataset
   foreach population-list[ ?1 ->
     let hh-list-entry ?1
     let renters-to-create 1
     let population-weight item 10 hh-list-entry  ; max is currently 115
     ;Note that the command int just eliminates the decimal - it does not round
-    set renters-to-create int (population-weight * (population-representation-sample / 100)) ;
+    set renters-to-create int (population-weight * (population-representation-sample / 100)) ; determine the number of households that will be created per row of the synthetic dataset
     if renters-to-create < 1 [set renters-to-create 1]
 
     ;eliminate synthetic population households that have no income
@@ -162,7 +165,7 @@ to Load-Households-and-Rentals
     create-renters renters-to-create [
       set evicted? false
       set months-evicted 0
-
+      ; PUMA is locational information
       set puma item 0 hh-list-entry
       if puma = 101 or puma = 102 or puma = 103 or puma = 104 [set town "Mesa"]
       if puma = 100 or puma = 105 or puma = 106 or puma = 107 [set town "Gilbert-Chandler"]
@@ -170,7 +173,7 @@ to Load-Households-and-Rentals
       if puma = 110 or puma = 111 or puma = 112 [set town "Scottsdale"]
       if puma > 112 [set town "Phoenix"]
       let my-town town
-      move-to one-of patches with [is-a-rental-property? = false and township = my-town]
+      move-to one-of patches with [is-a-rental-property? = false and township = my-town]; move the agent to patches that have the same town.
       set previous-rental-location patch-here
       set household-type item 1 hh-list-entry
       set residence-type item 2 hh-list-entry
@@ -181,11 +184,10 @@ to Load-Households-and-Rentals
       set number-of-persons item 3 hh-list-entry
       set monthly-rental-payment item 4 hh-list-entry
       let food-stamps  item 5 hh-list-entry
-      if food-stamps > 0 [set SNAP determine-SNAP number-of-persons ]
-
+      if food-stamps > 0 [set SNAP determine-SNAP number-of-persons ] ; determine the amount of money from SNAP for a household based on the number of people in a household
+      ; Set other household characteristics
       set vehicle-number  item 7 hh-list-entry
       set vehicles-with-lien 0
-      ;ifelse vehicle-number > 0 [ set car-payment (random 50) + 50][set car-payment 0]   ; *NA
       set annual-household-income  item 8 hh-list-entry ; annual amount
       set utility-cost item 13 hh-list-entry
       set pap  item 9 hh-list-entry
@@ -222,15 +224,6 @@ end
 to-report determine-SNAP [number-people]
   let funds  122 * number-people
 
-;  if number-people = 1 [set funds 131]
-;  if number-people = 2 [set funds 245]
-;  if number-people = 3 [set funds 378]
-;  if number-people = 4 [set funds 448]
-;  if number-people = 5 [set funds 526]
-;  if number-people = 6 [set funds 632]
-;  if number-people = 7 [set funds 710]
-;  if number-people = 8 [set funds 873]
-;  if number-people > 8 [set funds 873] ;*NA
   report funds
 
 end
@@ -248,7 +241,7 @@ end
 
 to Go
 
-    ; Community Assistance Programs Reset Their Monthly Funds
+    ; Community Assistance Programs (CAPs) Reset Their Monthly Funds
   set cap-maricopa-utility-pot (Annual-Maricopa-Utility-Pot / 12) * (population-representation-sample / 100) ; Total SFY 2020 Alerts
   set cap-mesa-utility-pot (Annual-Mesa-Utility-Pot / 12) * (population-representation-sample / 100) ; Total SFY 2020 Alerts
   set cap-phx-utility-pot (Annual-Phoenix-Utility-Pot / 12) * (population-representation-sample / 100) ; Total SFY 2020 Alerts
@@ -258,18 +251,18 @@ to Go
     set cap-mesa-rental-pot ( Annual-Mesa-Rental-Pot / 12) * (population-representation-sample / 100);
     set cap-phx-rental-pot ( Annual-Phoenix-Rental-Pot / 12) * (population-representation-sample / 100);
   ]
-  if month = 13[; ERA 1
+  if month = 13[; ERA 1   Adjust income based on month because extra money was allocated to CAPs during the pandemic
     set cap-maricopa-rental-pot (15677653 ) * (population-representation-sample / 100) ;
     set cap-mesa-rental-pot ( 15760806) * (population-representation-sample / 100);
     set cap-phx-rental-pot ( 58823958 ) * (population-representation-sample / 100);
   ]
-  if month = 15[ ; ERA 2
+  if month = 15[ ; ERA 2  Adjust income based on month because extra money was allocated to CAPs during the pandemic
     set cap-maricopa-rental-pot cap-maricopa-rental-pot + ( 12404992 * (population-representation-sample / 100)) ;
     set cap-mesa-rental-pot cap-mesa-rental-pot + ( 12470788 * (population-representation-sample / 100));
     set cap-phx-rental-pot cap-phx-rental-pot + ( 61425795 * (population-representation-sample / 100));
 
   ]
-
+    ; Determine the number of households that can be assissted by CAPs each month - essentially the number of appointments
     set cap-maricopa-rental-assist-monthly-apts Number-of-Assissted-Households-Per-Month * (population-representation-sample / 100);*MAG
     set cap-mesa-rental-assist-monthly-apts Number-of-Assissted-Households-Per-Month * (population-representation-sample / 100);*MAG
     set cap-phoenix-rental-assist-monthly-apts Number-of-Assissted-Households-Per-Month * (population-representation-sample / 100);*MAG
@@ -283,17 +276,16 @@ to Go
 
     set hhs-requesting-appointments-rental 0
     set hhs-getting-appointments-rental 0
-   set   hhs-requesting-appointments-utility 0
-   set hhs-getting-appointments-utility 0
+    set hhs-requesting-appointments-utility 0
+    set hhs-getting-appointments-utility 0
 
     ;MAG adjustment ERA 1 and 2 or month 13 and 16
-    let msra-rule 12; months since rental assistance - this rule goes away in 1/2021
+    let msra-rule 12; months since rental assistance - this rule goes away in 1/2021 - it prevented households from getting assistance more than once every 12 months
     if month > 12 [set msra-rule 0]
 
 
-     ; Covid Income Shock Period
-     ; Determine monthly Shock Frquency based on Pulse Survey, Expected Loss of Emplyment Income
-
+    ; Covid Income Shock Period
+    ; Determine monthly Shock Frquency based on Pulse Survey, Expected Loss of Emplyment Income
     if month < 4 [set covid-shock-quantity 5]
     if month = 4 [set covid-shock-quantity 34]
     if month = 5 [set covid-shock-quantity 31]
@@ -309,26 +301,21 @@ to Go
     if month = 15 [set covid-shock-quantity 17]
     if month = 16 [set covid-shock-quantity 15]
     if month = 17 [set covid-shock-quantity 13]
-    ;if month > 17 [set covid-shock-quantity 10]
-  if month = 18 [set covid-shock-quantity 11]
-  if month = 19 [set covid-shock-quantity 9]
-  if month = 20 [set covid-shock-quantity 7]
-  if month = 21 [set covid-shock-quantity 5]
-  if month = 22 [set covid-shock-quantity 3]
-  if month = 23 [set covid-shock-quantity 2]
-  if month = 24 [set covid-shock-quantity 1]
-  if month > 24 [set covid-shock-quantity 0]
+    if month = 18 [set covid-shock-quantity 11]
+    if month = 19 [set covid-shock-quantity 9]
+    if month = 20 [set covid-shock-quantity 7]
+    if month = 21 [set covid-shock-quantity 5]
+    if month = 22 [set covid-shock-quantity 3]
+    if month = 23 [set covid-shock-quantity 2]
+    if month = 24 [set covid-shock-quantity 1]
+    if month > 24 [set covid-shock-quantity 0]
 
 
     ask renters[
 
-
        let current-income monthly-hh-income
 
-         ; No longer the same household getting impacts and dynamic based on the month
         ;Monthly Income Shock Occurs
-
-
     if (random 100 + 1) < covid-shock-quantity [
                 set current-income current-income - ((covid-shock-magnitude / 100) * current-income)
     ]
@@ -345,9 +332,6 @@ to Go
             [ if annual-household-income < 150000 [set current-income current-income + (second-stimulus-payment * 2)]]
             [ if annual-household-income < 75000 [set current-income current-income + second-stimulus-payment]]
        ]
-
-      ; Got rid of income-improvements - MAG
-
 
         set current-income current-income + monthly-hh-ss-income; social security and pap is not affected by income shocks  - general or covid
         set subsistence-cost monthly-subsistence-per-person * number-of-persons
@@ -498,6 +482,7 @@ to Go
 
 end
 
+; pay rental bill and calculate any debt
 to pay-rent
   ifelse balance > 0 [
     set balance balance - monthly-rental-payment
@@ -512,7 +497,7 @@ to pay-rent
 
 end
 
-
+; pay utility bill and calculate any debt
 to pay-utilities
   ifelse balance > 0 [
     set balance balance - utility-cost
@@ -597,6 +582,7 @@ to-report determine-rental-assistance [income-this-month rental-bill]
     if town = "Mesa"  and cap-mesa-rental-assist-monthly-apts > 0  [ ;
       set cap-mesa-rental-assist-monthly-apts cap-mesa-rental-assist-monthly-apts - 1 ; use one of monthly appointments available
       set hhs-getting-appointments-rental hhs-getting-appointments-rental + 1
+     ; Give money to household if CAP still has any
       if cap-mesa-rental-pot > rental-bill and rental-bill < 1200 and income-this-month < item number-of-persons sixty-pct-state-median-income
       [ set cap-mesa-rental-pot cap-mesa-rental-pot - rental-bill
         set rental-assistance-total rental-bill
@@ -605,6 +591,7 @@ to-report determine-rental-assistance [income-this-month rental-bill]
     if town = "Phoenix" and cap-phoenix-rental-assist-monthly-apts > 0[
       set cap-phoenix-rental-assist-monthly-apts cap-phoenix-rental-assist-monthly-apts - 1 ; use one of monthly appointments available
       set hhs-getting-appointments-rental hhs-getting-appointments-rental + 1
+    ; Give money to household if CAP still has any
       if cap-phx-rental-pot > rental-bill and rental-bill < 1200 and income-this-month < item number-of-persons sixty-pct-state-median-income
       [ set cap-phx-rental-pot cap-phx-rental-pot - rental-bill
         set rental-assistance-total rental-bill
@@ -613,6 +600,7 @@ to-report determine-rental-assistance [income-this-month rental-bill]
     if town = "Gilbert-Chandler" or town = "Tempe" or town = "Scottsdale" and cap-maricopa-rental-assist-monthly-apts > 0 [
        set cap-maricopa-rental-assist-monthly-apts cap-maricopa-rental-assist-monthly-apts - 1 ; use one of monthly appointments available
        set hhs-getting-appointments-rental hhs-getting-appointments-rental + 1
+    ; Give money to household if CAP still has any
       if cap-maricopa-rental-pot > rental-bill and rental-bill < 1200 and income-this-month < item number-of-persons sixty-pct-state-median-income
       [ set cap-maricopa-rental-pot cap-maricopa-rental-pot - rental-bill
         set rental-assistance-total rental-bill
@@ -621,7 +609,6 @@ to-report determine-rental-assistance [income-this-month rental-bill]
 
 
     ]
-  ;print rental-assistance-total
    if  rental-assistance-total > 0 [ set tracker-rental-assistance tracker-rental-assistance + 1]
 
 
@@ -750,17 +737,6 @@ to-report month-number [month-name]
 end
 
 
-;Unused Procedure designed to output global information.
-to save-csv
-
-  let filename "test"
-    file-open (word filename ".csv")
-
-  let text-out (sentence ","average-balance-renters","average-utility-arrears","average-rental-arrears","average-balance-evicted","tracker-rental-assistance","tracker-utility-assistance","tracker-faith-based-assistance","count renters with [evicted? = true]",")
-  file-type text-out
-   file-close
-
-end
 
 ;Copyright: (C) 2021 by Sean Bergin and Joffa Applegate, School of Complex Adaptive Systems, Arizona State University
 ;License: This program is free software under the GPL-3.0 License. See https://choosealicense.com/licenses/gpl-3.0/ for license details.
@@ -1056,10 +1032,10 @@ Annual-Faith-Based-Charities
 Number
 
 SLIDER
-374
-888
-523
-921
+381
+967
+614
+1000
 population-representation-sample
 population-representation-sample
 1
